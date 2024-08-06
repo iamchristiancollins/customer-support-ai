@@ -1,43 +1,50 @@
 "use client";
 
 import { Box, Button, Stack, TextField } from "@mui/material";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 
 export default function Home() {
   const [messages, setMessages] = useState([
     {
       role: "assistant",
       content:
-        "Hi! I'm the Headstarter support assistant. How can I help you today?",
+        "Hi! I'm the your personal support assistant. How can I help you today?",
     },
   ]);
   const [message, setMessage] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const sendMessage = async () => {
+    if (!message.trim() || isLoading) return; // Don't send empty messages
+    setIsLoading(true);
+
     setMessage("");
     setMessages((messages) => [
       ...messages,
       { role: "user", content: message },
       { role: "assistant", content: "" },
     ]);
-    const response = fetch("/api/chat", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify([...messages, { role: "user", content: message }]),
-    }).then(async (res) => {
-      const reader = res.body.getReader();
+
+    try {
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify([...messages, { role: "user", content: message }]),
+      });
+
+      if (!response.ok) {
+        throw new Error("Network response was not ok");
+      }
+
+      const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
-      let result = "";
-      return reader.read().then(function processText({ done, value }) {
-        if (done) {
-          return result;
-        }
-        const text = decoder.decode(value || new Uint8Array(), {
-          stream: true,
-        });
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const text = decoder.decode(value, { stream: true });
         setMessages((messages) => {
           let lastMessage = messages[messages.length - 1];
           let otherMessages = messages.slice(0, messages.length - 1);
@@ -46,9 +53,37 @@ export default function Home() {
             { ...lastMessage, content: lastMessage.content + text },
           ];
         });
-      });
-    });
+      }
+    } catch (error) {
+      console.error("Error:", error);
+      setMessages((messages) => [
+        ...messages,
+        {
+          role: "assistant",
+          content:
+            "I'm sorry, but I encountered an error. Please try again later.",
+        },
+      ]);
+    }
+    setIsLoading(false);
   };
+
+  const handleKeyPress = (e) => {
+    if (e.key == "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  const messageEndRef = useRef(null);
+
+  const scrollToBottom = () => {
+    messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
 
   return (
     <Box
@@ -96,16 +131,24 @@ export default function Home() {
               </Box>
             </Box>
           ))}
+          <div ref={messageEndRef} />
         </Stack>
-        <Stack direction={"row"} spacing={2}>
+        <Stack direction={"row"} spacing={2} bgcolor={"white"}>
           <TextField
             label="Message"
+            variant="outlined"
             fullWidth
             value={message}
             onChange={(e) => setMessage(e.target.value)}
+            onKeyPress={handleKeyPress}
+            disabled={isLoading}
           />
-          <Button variant="contained" onClick={sendMessage}>
-            Send
+          <Button
+            variant="contained"
+            onClick={sendMessage}
+            disabled={isLoading}
+          >
+            {isLoading ? "Sending..." : "Send"}
           </Button>
         </Stack>
       </Stack>
