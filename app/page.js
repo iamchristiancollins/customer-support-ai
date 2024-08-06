@@ -13,6 +13,8 @@ export default function Home() {
   ]);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const sendMessage = async () => {
     if (!message.trim() || isLoading) return; // Don't send empty messages
