@@ -144,7 +144,12 @@ export default function Chat() {
       alignItems="center"
       bgcolor="background.default"
     >
-      <Button onClick={handleLogout}>Logout</Button>
+      <Button
+      variant="contained"
+      bgcolor="background.default"
+      onClick={handleLogout}>
+        Logout
+      </Button>
       <Stack
         direction={"column"}
         width="500px"
