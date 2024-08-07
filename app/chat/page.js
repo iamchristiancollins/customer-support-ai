@@ -4,37 +4,46 @@ import { Box, Button, Stack, TextField, Typography } from "@mui/material";
 import { useState, useRef, useEffect } from "react";
 import { auth, db } from "../../firebase";
 import { signOut } from "firebase/auth";
-import { addDoc, collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+} from "firebase/firestore";
 
 export default function Chat() {
-  const [messages, setMessages] = useState([
-    {
-      role: "assistant",
-      content:
-        "Hi! I'm your personal support assistant. How can I help you today?",
-    },
-  ]);
+  const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const messageEndRef = useRef(null);
+
+  const user = auth.currentUser;
 
   const sendMessage = async () => {
-    if (!message.trim() || isLoading) return; // Don't send empty messages
+    if (!message.trim() || isLoading) return;
     setIsLoading(true);
 
+    const newMessage = {
+      role: "user",
+      content: message,
+      timestamp: new Date(),
+      userId: user.uid,
+    };
+
     setMessage("");
-    setMessages((messages) => [
-      ...messages,
-      { role: "user", content: message },
-      { role: "assistant", content: "" },
-    ]);
+    setMessages((message) => [...messages, newMessage]);
 
     try {
+      await addDoc(collection(db, "messages"), newMessage);
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify([...messages, { role: "user", content: message }]),
+        body: JSON.stringify({ ...messages, newMessage }),
       });
 
       if (!response.ok) {
@@ -46,8 +55,6 @@ export default function Chat() {
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
-        const text = decoder.decode(value, { stream: true });
         setMessages((messages) => {
           let lastMessage = messages[messages.length - 1];
           let otherMessages = messages.slice(0, messages.length - 1);
@@ -63,8 +70,8 @@ export default function Chat() {
         ...messages,
         {
           role: "assistant",
-          content:
-            "I'm sorry, but I encountered an error. Please try again later.",
+          content: "Sorry, but I encountered an error. Please try again later.",
+          timestamp: new Date(),
         },
       ]);
     }
@@ -78,8 +85,6 @@ export default function Chat() {
     }
   };
 
-  const messageEndRef = useRef(null);
-
   const scrollToBottom = () => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -87,6 +92,23 @@ export default function Chat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (user) {
+        const q = query(
+          collection(db, "messages"),
+          where("userId", "==", user.uid),
+          orderBy("timestamp", "asc")
+        );
+        const querySnapshot = await getDocs(q);
+        const fetchedMessages = querySnapshot.docs.map((doc) => doc.data());
+        setMessages(fetchedMessages);
+      }
+    };
+    
+    fetchMessages();
+  }, [user]);
 
   const handleLogout = () => {
     signOut(auth)
