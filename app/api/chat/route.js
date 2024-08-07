@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server"; // Import NextResponse from Next.js for handling responses
 import OpenAI from "openai"; // Import OpenAI library for interacting with the OpenAI API
-import { signUp, signIn, signOutUser } from "../../auth";
+import { signUp, signIn, signOutUser } from "../../../auth";
 
 // System prompt for the AI, providing guidelines on how to respond to users
-const systemPrompt = ""; // Use your own system prompt here
+const systemPrompt = "You should respond with information about me, Christian Collins"; // Use your own system prompt here
 // POST function to handle incoming requests
 export async function POST(req) {
   const data = await req.json(); // Parse the JSON body of the incoming request

@@ -1,7 +1,7 @@
 "use client";
 
+import { useEffect, useState, useRef } from "react";
 import { Box, Button, Stack, TextField, Typography } from "@mui/material";
-import { useState, useRef, useEffect } from "react";
 import { auth, db } from "../../firebase";
 import { signOut } from "firebase/auth";
 import {
@@ -33,7 +33,7 @@ export default function Chat() {
     };
 
     setMessage("");
-    setMessages((message) => [...messages, newMessage]);
+    setMessages((messages) => [...messages, newMessage]);
 
     try {
       await addDoc(collection(db, "messages"), newMessage);
@@ -43,7 +43,7 @@ export default function Chat() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ ...messages, newMessage }),
+        body: JSON.stringify([...messages, newMessage]),
       });
 
       if (!response.ok) {
@@ -53,25 +53,39 @@ export default function Chat() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
+      let openaiMessage = {
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+        userId: user.uid,
+      };
+
       while (true) {
         const { done, value } = await reader.read();
+        if (done) break;
+        const text = decoder.decode(value, { stream: true });
+        openaiMessage.content += text;
+
+        // Update assistant message content as it streams in
         setMessages((messages) => {
-          let lastMessage = messages[messages.length - 1];
-          let otherMessages = messages.slice(0, messages.length - 1);
-          return [
-            ...otherMessages,
-            { ...lastMessage, content: lastMessage.content + text },
-          ];
+          const lastMessage = messages[messages.length - 1];
+          if (lastMessage.role === "assistant") {
+            lastMessage.content += text;
+            return [...messages.slice(0, -1), lastMessage];
+          }
+          return [...messages, { ...openaiMessage }];
         });
       }
+
+      await addDoc(collection(db, "messages"), openaiMessage);
     } catch (error) {
       console.error("Error:", error);
       setMessages((messages) => [
         ...messages,
         {
           role: "assistant",
-          content: "Sorry, but I encountered an error. Please try again later.",
-          timestamp: new Date(),
+          content:
+            "I'm sorry, but I encountered an error. Please try again later.",
         },
       ]);
     }
@@ -106,7 +120,7 @@ export default function Chat() {
         setMessages(fetchedMessages);
       }
     };
-    
+
     fetchMessages();
   }, [user]);
 
