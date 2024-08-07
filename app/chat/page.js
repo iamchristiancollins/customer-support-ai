@@ -2,8 +2,9 @@
 
 import { Box, Button, Stack, TextField, Typography } from "@mui/material";
 import { useState, useRef, useEffect } from "react";
-import { auth } from "../../firebase";
+import { auth, db } from "../../firebase";
 import { signOut } from "firebase/auth";
+import { addDoc, collection, query, where, getDocs, orderBy } from "firebase/firestore";
 
 export default function Chat() {
   const [messages, setMessages] = useState([
