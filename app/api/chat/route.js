@@ -1,12 +1,28 @@
 import { NextResponse } from "next/server"; // Import NextResponse from Next.js for handling responses
 import OpenAI from "openai"; // Import OpenAI library for interacting with the OpenAI API
+import { signUp, signIn, signOutUser } from "../../auth";
 
 // System prompt for the AI, providing guidelines on how to respond to users
 const systemPrompt = ""; // Use your own system prompt here
 // POST function to handle incoming requests
-async function POST(req) {
-  const openai = new OpenAI(); // Create a new instance of the OpenAI client
+export async function POST(req) {
   const data = await req.json(); // Parse the JSON body of the incoming request
+
+  // Handle authentication actions
+  if (data.action === "signup") {
+    await signUp(data.email, data.password);
+    return NextResponse.json({ message: "Sign up successful" });
+  }
+  if (data.action === "signin") {
+    await signIn(data.email, data.password);
+    return NextResponse.json({ message: "Sign in successful" });
+  }
+  if (data.action === "signout") {
+    await signOutUser();
+    return NextResponse.json({ message: "Sign out successful" });
+  }
+
+  const openai = new OpenAI(); // Create a new instance of the OpenAI client
 
   // Create a chat completion request to the OpenAI API
   const completion = await openai.chat.completions.create({
@@ -38,5 +54,3 @@ async function POST(req) {
 
   return new NextResponse(stream); // Return the stream as the response
 }
-
-export { POST }; // Export the POST function for handling incoming requests
