@@ -1,40 +1,49 @@
 "use client";
 
+import { useEffect, useState, useRef } from "react";
 import { Box, Button, Stack, TextField, Typography } from "@mui/material";
-import { useState, useRef, useEffect } from "react";
 import { auth, db } from "../../firebase";
 import { signOut } from "firebase/auth";
-import { addDoc, collection, query, where, getDocs, orderBy } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+  orderBy,
+} from "firebase/firestore";
 
 export default function Chat() {
-  const [messages, setMessages] = useState([
-    {
-      role: "assistant",
-      content:
-        "Hi! I'm your personal support assistant. How can I help you today?",
-    },
-  ]);
+  const [messages, setMessages] = useState([]);
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const messageEndRef = useRef(null);
+
+  const user = auth.currentUser;
 
   const sendMessage = async () => {
-    if (!message.trim() || isLoading) return; // Don't send empty messages
+    if (!message.trim() || isLoading) return;
     setIsLoading(true);
 
+    const newMessage = {
+      role: "user",
+      content: message,
+      timestamp: new Date(),
+      userId: user.uid,
+    };
+
     setMessage("");
-    setMessages((messages) => [
-      ...messages,
-      { role: "user", content: message },
-      { role: "assistant", content: "" },
-    ]);
+    setMessages((messages) => [...messages, newMessage]);
 
     try {
+      await addDoc(collection(db, "messages"), newMessage);
+
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify([...messages, { role: "user", content: message }]),
+        body: JSON.stringify([...messages, newMessage]),
       });
 
       if (!response.ok) {
@@ -44,19 +53,31 @@ export default function Chat() {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
 
+      let openaiMessage = {
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+        userId: user.uid,
+      };
+
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         const text = decoder.decode(value, { stream: true });
+        openaiMessage.content += text;
+
+        // Update assistant message content as it streams in
         setMessages((messages) => {
-          let lastMessage = messages[messages.length - 1];
-          let otherMessages = messages.slice(0, messages.length - 1);
-          return [
-            ...otherMessages,
-            { ...lastMessage, content: lastMessage.content + text },
-          ];
+          const lastMessage = messages[messages.length - 1];
+          if (lastMessage.role === "assistant") {
+            lastMessage.content += text;
+            return [...messages.slice(0, -1), lastMessage];
+          }
+          return [...messages, { ...openaiMessage }];
         });
       }
+
+      await addDoc(collection(db, "messages"), openaiMessage);
     } catch (error) {
       console.error("Error:", error);
       setMessages((messages) => [
@@ -78,8 +99,6 @@ export default function Chat() {
     }
   };
 
-  const messageEndRef = useRef(null);
-
   const scrollToBottom = () => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -87,6 +106,23 @@ export default function Chat() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    const fetchMessages = async () => {
+      if (user) {
+        const q = query(
+          collection(db, "messages"),
+          where("userId", "==", user.uid),
+          orderBy("timestamp", "asc")
+        );
+        const querySnapshot = await getDocs(q);
+        const fetchedMessages = querySnapshot.docs.map((doc) => doc.data());
+        setMessages(fetchedMessages);
+      }
+    };
+
+    fetchMessages();
+  }, [user]);
 
   const handleLogout = () => {
     signOut(auth)
@@ -108,7 +144,12 @@ export default function Chat() {
       alignItems="center"
       bgcolor="background.default"
     >
-      <Button onClick={handleLogout}>Logout</Button>
+      <Button
+      variant="contained"
+      bgcolor="background.default"
+      onClick={handleLogout}>
+        Logout
+      </Button>
       <Stack
         direction={"column"}
         width="500px"

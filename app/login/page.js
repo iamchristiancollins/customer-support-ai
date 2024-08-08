@@ -62,7 +62,9 @@ export default function Login() {
         <Button variant="contained" onClick={handleLogin}>
           Login
         </Button>
-        <Button onClick={() => router.push("/signup")}>Sign Up</Button>
+        <Button variant="contained" onClick={() => router.push("/signup")}>
+          Sign Up
+        </Button>
       </Stack>
     </Box>
   );
